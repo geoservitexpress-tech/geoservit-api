@@ -66,6 +66,27 @@ describe('guía', () => {
     const pdf = await guiaPdf(pedido, 'sticker');
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
   });
+
+  it('con logo PNG lo incrusta; si el logo no carga, igual genera la guía', async () => {
+    // PNG de 1×1 válido.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const fetchOriginal = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => png }) as never;
+    const conLogo = await guiaPdf(
+      { ...pedido, remitenteNombre: 'Moda Deisy', remitenteLogoUrl: 'https://x/logo.png' },
+      'carta',
+    );
+    global.fetch = jest.fn().mockRejectedValue(new Error('caído')) as never;
+    const sinLogo = await guiaPdf({ ...pedido, remitenteLogoUrl: 'https://x/logo.png' }, 'carta');
+    global.fetch = fetchOriginal;
+    // El QR ya es una imagen: con logo hay más.
+    const imagenes = (pdf: Buffer) => pdf.toString('latin1').split('/Subtype /Image').length - 1;
+    expect(imagenes(conLogo)).toBeGreaterThan(imagenes(sinLogo));
+    expect(sinLogo.subarray(0, 4).toString()).toBe('%PDF');
+  });
 });
 
 describe('V1Controller', () => {

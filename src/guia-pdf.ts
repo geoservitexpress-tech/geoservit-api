@@ -21,6 +21,10 @@ export type PedidoGuia = {
   destinatarioDestinoNombre?: string | null;
   destinatarioDestinoTelefono?: string | null;
   usuarioSolicitud?: string | null;
+  /** Nombre comercial si el remitente es tienda; si no, el nombre de la persona. */
+  remitenteNombre?: string | null;
+  /** Logo de la tienda remitente (enlace firmado). */
+  remitenteLogoUrl?: string | null;
   paquete?: string | null;
   pesoKg?: number | string | null;
   observacionesManifiesto?: string | null;
@@ -33,11 +37,30 @@ export function totalACobrar(p: PedidoGuia): number {
   return recaudo > 0 ? recaudo : Number(p.tarifaEnvio ?? p.precio ?? 0);
 }
 
+/**
+ * Descarga el logo para incrustarlo (pdfkit solo dibuja PNG y JPG). Si tarda más de 3 s,
+ * falla o es otro formato, la guía sale sin logo.
+ */
+export async function descargarLogo(url: string | null | undefined): Promise<Buffer | null> {
+  if (!url) return null;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return null;
+    const b = Buffer.from(await r.arrayBuffer());
+    const png = b.subarray(0, 4).toString('hex') === '89504e47';
+    const jpg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    return png || jpg ? b : null;
+  } catch {
+    return null;
+  }
+}
+
 const pesos = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
 
 /** Guía en PDF (Carta o Sticker 10 × 15 cm) con QR a la consulta pública. */
 export async function guiaPdf(p: PedidoGuia, formato: 'carta' | 'sticker'): Promise<Buffer> {
   const sticker = formato === 'sticker';
+  const logo = await descargarLogo(p.remitenteLogoUrl);
   const qr = await QRCode.toBuffer(`${SITIO}/rastrear?guia=${encodeURIComponent(p.numGuia)}`, { margin: 1, width: 320 });
   const doc = new PDFDocument({ size: sticker ? [283, 425] : 'LETTER', margin: sticker ? 14 : 40 });
   const partes: Buffer[] = [];
@@ -68,7 +91,18 @@ export async function guiaPdf(p: PedidoGuia, formato: 'carta' | 'sticker'): Prom
   doc.font('Helvetica').fontSize(t(11)).text(`${nombre}${tel ? ` · Tel. ${tel}` : ''}`).text(dir);
   doc.moveDown(0.3);
   doc.font('Helvetica-Bold').fontSize(t(9)).text('REMITENTE');
-  doc.font('Helvetica').fontSize(t(11)).text(p.usuarioSolicitud ?? '—');
+  const remitente = p.remitenteNombre ?? p.usuarioSolicitud ?? '—';
+  if (logo) {
+    // Logo en una caja fija a la izquierda del nombre, para no mover lo que sigue.
+    const x = doc.page.margins.left;
+    const y = doc.y;
+    doc.image(logo, x, y, { fit: [t(60), t(36)] });
+    doc.font('Helvetica').fontSize(t(11)).text(remitente, x + t(66), y + t(12));
+    doc.x = x;
+    doc.y = Math.max(doc.y, y + t(38));
+  } else {
+    doc.font('Helvetica').fontSize(t(11)).text(remitente);
+  }
   if (recogida && p.direccion) doc.text(`Recogida: ${p.direccion}`);
   doc.moveDown(0.3);
   doc.font('Helvetica-Bold').fontSize(t(9)).text('PAQUETE');
