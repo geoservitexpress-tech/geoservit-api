@@ -49,7 +49,7 @@ export class V1Controller {
   @ApiOperation({
     summary: 'Crear un pedido',
     description:
-      'Mismos campos y reglas que el panel: al menos una foto del paquete, fecha desde hoy. ' +
+      'Mismos campos y reglas que el panel: fecha desde hoy; la foto del paquete es opcional. ' +
       'Envía `Idempotency-Key` (p. ej. el id de tu orden) para que un reintento no cree un duplicado (24 h).',
   })
   @ApiHeader({ name: 'Idempotency-Key', required: false, example: 'orden-123' })
