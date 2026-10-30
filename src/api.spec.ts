@@ -1,3 +1,4 @@
+import { sinIdsInternos } from './sin-ids';
 import { createHmac } from 'crypto';
 import type { BackendClient } from './backend.client';
 import { ApiError, codigoPorEstado } from './errores';
@@ -89,6 +90,27 @@ describe('guía', () => {
   });
 });
 
+describe('sinIdsInternos', () => {
+  it('quita los ids internos a cualquier profundidad y deja guía y catálogos', () => {
+    expect(
+      sinIdsInternos({
+        idPedido: 243,
+        numGuia: 'BL-1',
+        idEstadoPedido: 5,
+        identificacion: '123',
+        fotos: ['a'],
+        historial: [{ idSeguimiento: 9, estado: 'Creado', idUsuario: 4 }],
+      }),
+    ).toEqual({
+      numGuia: 'BL-1',
+      idEstadoPedido: 5,
+      identificacion: '123',
+      fotos: ['a'],
+      historial: [{ estado: 'Creado' }],
+    });
+  });
+});
+
 describe('V1Controller', () => {
   const backend = { pedir: jest.fn(async () => ({ idPedido: 1 })) };
   const c = new V1Controller(backend as unknown as BackendClient);
@@ -106,13 +128,13 @@ describe('V1Controller', () => {
   });
 
   it('corregir no deja cambiar el estado; cancelar manda el estado 6', async () => {
-    await c.corregir(req, 5, { idEstadoPedido: 5, telefonoDestinatario: '300' });
-    expect(backend.pedir).toHaveBeenLastCalledWith('pedidos/5', {
+    await c.corregir(req, 'BL-1', { idEstadoPedido: 5, telefonoDestinatario: '300' });
+    expect(backend.pedir).toHaveBeenLastCalledWith('pedidos/BL-1', {
       metodo: 'PATCH',
       tienda: 7,
       body: { telefonoDestinatario: '300' },
     });
-    await c.cancelar(req, 5);
-    expect(backend.pedir).toHaveBeenLastCalledWith('pedidos/5', { metodo: 'PATCH', tienda: 7, body: { idEstadoPedido: 6 } });
+    await c.cancelar(req, 'BL-1');
+    expect(backend.pedir).toHaveBeenLastCalledWith('pedidos/BL-1', { metodo: 'PATCH', tienda: 7, body: { idEstadoPedido: 6 } });
   });
 });

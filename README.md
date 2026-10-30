@@ -43,8 +43,10 @@ curl -X POST https://api.geoservitexpress.com/v1/pedidos \
        "fotosPaqueteUrls":["https://tutienda.com/fotos/orden-123.jpg"]}'
 ```
 
-Otros: `GET /v1/pedidos/{id}`, `GET /v1/pedidos/{id}/historial`, `GET /v1/pedidos/{id}/guia.pdf?formato=sticker`,
-`PATCH /v1/pedidos/{id}` (solo en Creado), `POST /v1/pedidos/{id}/cancelar` (Creado o Asignado).
+Cada pedido se identifica por su guía (`numGuia`, p. ej. `BL-20261016-ABC123`); la API no expone ids internos.
+
+Otros: `GET /v1/pedidos/{guia}`, `GET /v1/pedidos/{guia}/historial`, `GET /v1/pedidos/{guia}/guia.pdf?formato=sticker`,
+`PATCH /v1/pedidos/{guia}` (solo en Creado), `POST /v1/pedidos/{guia}/cancelar` (Creado o Asignado).
 
 Errores: `{ "codigo": "...", "mensaje": "..." }` — `LLAVE_INVALIDA` (401), `PEDIDO_NO_ENCONTRADO` (404),
 `DATOS_INVALIDOS` (400), `ESTADO_NO_PERMITE` (409), `LIMITE_EXCEDIDO` (429, con `Retry-After`), `ERROR_INTERNO`.
@@ -53,7 +55,7 @@ Errores: `{ "codigo": "...", "mensaje": "..." }` — `LLAVE_INVALIDA` (401), `PE
 
 GeoServit hace `POST` a tu URL con `X-GeoServit-Evento` (`pedido.asignado`, `pedido.recibido`,
 `pedido.en_curso`, `pedido.entregado`, `pedido.no_entregado`, `pedido.cancelado`, `webhook.prueba`) y
-`X-GeoServit-Firma: sha256=<HMAC-SHA256 del cuerpo con tu secreto>`. Responde 2xx; si no, se reintenta
+`X-GeoServit-Firma: sha256=<HMAC-SHA256 del cuerpo con tu secreto>`. `X-GeoServit-Id` es igual en cada reintento de un aviso. El cuerpo trae `evento`, `numGuia`, `idEstadoPedido` y `fecha`. Responde 2xx; si no, se reintenta
 hasta 8 veces en 24 h. Verificación en Node:
 
 ```js

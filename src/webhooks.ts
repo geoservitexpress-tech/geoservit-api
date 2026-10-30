@@ -2,6 +2,7 @@ import { createHmac } from 'crypto';
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { BackendClient } from './backend.client';
 import { config } from './config';
+import { sinIdsInternos } from './sin-ids';
 
 type Evento = { idWebhookEvento: number; evento: string; payload: unknown; url: string; secreto: string };
 
@@ -41,7 +42,7 @@ export class RepartidorWebhooks implements OnApplicationBootstrap, OnApplication
   }
 
   async enviar(e: Evento): Promise<void> {
-    const cuerpo = JSON.stringify(e.payload);
+    const cuerpo = JSON.stringify(sinIdsInternos(e.payload));
     let ok = false;
     let error: string | undefined;
     try {
@@ -51,7 +52,8 @@ export class RepartidorWebhooks implements OnApplicationBootstrap, OnApplication
           'Content-Type': 'application/json',
           'User-Agent': 'GeoServit-Webhooks/1',
           'X-GeoServit-Evento': e.evento,
-          'X-GeoServit-Id': String(e.idWebhookEvento),
+          // Estable entre reintentos, para detectar duplicados, sin revelar el consecutivo.
+          'X-GeoServit-Id': firmar(e.secreto, String(e.idWebhookEvento)).slice(7, 39),
           'X-GeoServit-Firma': firmar(e.secreto, cuerpo),
         },
         body: cuerpo,
