@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query, Req, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { BackendClient } from './backend.client';
 import { guiaPdf, type PedidoGuia } from './guia-pdf';
 import { LlaveGuard, type PeticionConTienda } from './llave.guard';
+import { SinIdsInterceptor } from './sin-ids';
 
 const EJEMPLO_PEDIDO = {
   idTipoPedido: 1,
@@ -32,6 +33,7 @@ const EJEMPLO_PEDIDO = {
 @ApiTags('Pedidos')
 @ApiBearerAuth('llave')
 @UseGuards(LlaveGuard)
+@UseInterceptors(SinIdsInterceptor)
 @Controller('v1')
 export class V1Controller {
   constructor(private readonly backend: BackendClient) {}
@@ -69,46 +71,46 @@ export class V1Controller {
     return this.backend.pedir('pedidos', { tienda: req.tienda, query });
   }
 
-  @Get('pedidos/:id')
+  @Get('pedidos/:guia')
   @ApiOperation({ summary: 'Consultar un pedido (estado, guía, destinatario, cobro)' })
-  @ApiParam({ name: 'id', example: 123 })
-  uno(@Req() req: PeticionConTienda, @Param('id', ParseIntPipe) id: number) {
-    return this.backend.pedir(`pedidos/${id}`, { tienda: req.tienda });
+  @ApiParam({ name: 'guia', example: 'BL-20261016-ABC123' })
+  uno(@Req() req: PeticionConTienda, @Param('guia') guia: string) {
+    return this.backend.pedir(`pedidos/${encodeURIComponent(guia)}`, { tienda: req.tienda });
   }
 
-  @Get('pedidos/:id/historial')
+  @Get('pedidos/:guia/historial')
   @ApiOperation({ summary: 'Historial de estados del pedido' })
-  historial(@Req() req: PeticionConTienda, @Param('id', ParseIntPipe) id: number) {
-    return this.backend.pedir(`pedidos/${id}/historial`, { tienda: req.tienda });
+  historial(@Req() req: PeticionConTienda, @Param('guia') guia: string) {
+    return this.backend.pedir(`pedidos/${encodeURIComponent(guia)}/historial`, { tienda: req.tienda });
   }
 
-  @Get('pedidos/:id/guia.pdf')
+  @Get('pedidos/:guia/guia.pdf')
   @ApiOperation({ summary: 'Guía en PDF para imprimir', description: '`formato`: `carta` (por defecto) o `sticker` (10 × 15 cm).' })
   @ApiQuery({ name: 'formato', required: false, enum: ['carta', 'sticker'] })
   async guia(
     @Req() req: PeticionConTienda,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('guia') guia: string,
     @Query('formato') formato: string | undefined,
     @Res() res: Response,
   ) {
-    const pedido = await this.backend.pedir<PedidoGuia>(`pedidos/${id}`, { tienda: req.tienda });
+    const pedido = await this.backend.pedir<PedidoGuia>(`pedidos/${encodeURIComponent(guia)}`, { tienda: req.tienda });
     const pdf = await guiaPdf(pedido, formato === 'sticker' ? 'sticker' : 'carta');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="guia-${pedido.numGuia}.pdf"`);
     res.send(pdf);
   }
 
-  @Patch('pedidos/:id')
+  @Patch('pedidos/:guia')
   @ApiOperation({ summary: 'Corregir un pedido', description: 'Solo mientras está en Creado (sin repartidor); mismas reglas que el panel.' })
-  corregir(@Req() req: PeticionConTienda, @Param('id', ParseIntPipe) id: number, @Body() body: Record<string, unknown>) {
+  corregir(@Req() req: PeticionConTienda, @Param('guia') guia: string, @Body() body: Record<string, unknown>) {
     const { idEstadoPedido: _ignorar, ...datos } = body ?? {};
-    return this.backend.pedir(`pedidos/${id}`, { metodo: 'PATCH', tienda: req.tienda, body: datos });
+    return this.backend.pedir(`pedidos/${encodeURIComponent(guia)}`, { metodo: 'PATCH', tienda: req.tienda, body: datos });
   }
 
-  @Post('pedidos/:id/cancelar')
+  @Post('pedidos/:guia/cancelar')
   @HttpCode(200)
   @ApiOperation({ summary: 'Cancelar un pedido', description: 'En Creado o Asignado.' })
-  cancelar(@Req() req: PeticionConTienda, @Param('id', ParseIntPipe) id: number) {
-    return this.backend.pedir(`pedidos/${id}`, { metodo: 'PATCH', tienda: req.tienda, body: { idEstadoPedido: 6 } });
+  cancelar(@Req() req: PeticionConTienda, @Param('guia') guia: string) {
+    return this.backend.pedir(`pedidos/${encodeURIComponent(guia)}`, { metodo: 'PATCH', tienda: req.tienda, body: { idEstadoPedido: 6 } });
   }
 }
